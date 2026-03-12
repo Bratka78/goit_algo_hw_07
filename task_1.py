@@ -13,23 +13,24 @@ class Name(Field):
 
 class Phone(Field):
     def __init__(self, value):
-        if not self.valid_numer(value):
+        if not self.valid_number(value):
             raise ValueError("Phone number must contain exactly 10 digits.")
         super().__init__(value)
 
-    def valid_numer(self, value):
+    def valid_number(self, value):
         return value.isdigit() and len(value) == 10   
     
 class Birthday(Field):
     def __init__(self, value):
         try:
             # Перевіряємо формат і перетворюємо рядок на datetime об'єкт
-            self.value = datetime.strptime(value, "%d.%m.%Y").date()
+            datetime.strptime(value, "%d.%m.%Y")
+            super().__init__(value)
         except ValueError:
             raise ValueError("Invalid date format. Use DD.MM.YYYY")
             
     def __str__(self):
-        return self.value.strftime("%d.%m.%Y")
+        return str(self.value)
 
 class Record():
     def __init__(self, name):
@@ -82,13 +83,13 @@ class AddressBook(UserDict):
     def get_upcoming_birthdays(self):
         upcoming_birthdays = []
         today = datetime.today().date()
-        
         for record in self.data.values():
             if not record.birthday:
                 continue
                 
             # Беремо дату народження в цьому році
-            bday = record.birthday.value.replace(year=today.year)
+            bday_date = datetime.strptime(record.birthday.value, "%d.%m.%Y").date()
+            bday = bday_date.replace(year=today.year)
             
             # Якщо день народження вже пройшов у цьому році, дивимось на наступний
             if bday < today:
@@ -106,6 +107,11 @@ class AddressBook(UserDict):
                     "congratulation_date": congratulation_date.strftime("%d.%m.%Y")
                 })
         return upcoming_birthdays
+    
+    def __str__(self):
+        if not self.data:
+            return "Address book is empty."
+        return "\n".join(str(record) for record in self.data.values())
 
 # Хендлери
 
@@ -115,9 +121,9 @@ def input_error(func):
             return func(*args, **kwargs)
         except ValueError as e:
             return str(e)
-        except IndexError:
-            return "Enter user name and the required argument."
-        except KeyError:
+        except (IndexError, KeyError):
+            return "Give me name and optional arguments please."
+        except AttributeError:
             return "Contact not found."
     return inner
 
@@ -138,35 +144,29 @@ def add_contact(args, book):
 def change_contact(args, book):
     name, old_phone, new_phone = args
     record = book.find(name)
-    if record:
-        record.edit_phone(old_phone, new_phone)
-        return "Contact updated."
-    return "Contact not found."
+    record.edit_phone(old_phone, new_phone)
+    return "Contact updated."
 
 @input_error
 def show_phone(args, book):
     name = args[0]
     record = book.find(name)
-    if record:
-        return "; ".join(p.value for p in record.phones)
-    return "Contact not found."
+    return "; ".join(p.value for p in record.phones)
 
 @input_error
 def add_birthday(args, book):
     name, date = args
     record = book.find(name)
-    if record:
-        record.add_birthday(date)
-        return "Birthday added."
-    return "Contact not found."
+    record.add_birthday(date)
+    return "Birthday added."
 
 @input_error
 def show_birthday(args, book):
     name = args[0]
     record = book.find(name)
-    if record and record.birthday:
+    if record.birthday:
         return f"{name}'s birthday: {record.birthday}"
-    return "Birthday not found or contact doesn't exist."
+    return f"No birthday set for {name}"
 
 @input_error
 def birthdays(args, book):
@@ -174,6 +174,10 @@ def birthdays(args, book):
     if not upcoming:
         return "No birthdays in the next 7 days."
     return "\n".join([f"{item['name']}: {item['congratulation_date']}" for item in upcoming])
+
+@input_error
+def show_all(args, book):
+    return str(book)
 
 #Основна частина
 
@@ -201,8 +205,7 @@ def main():
         elif command == "phone":
             print(show_phone(args, book))
         elif command == "all":
-            for record in book.data.values():
-                print(record)
+           print(show_all(args, book))
         elif command == "add-birthday":
             print(add_birthday(args, book))
         elif command == "show-birthday":
